@@ -14,6 +14,62 @@ pub struct XmlDocument {
 }
 
 impl XmlDocument {
+    pub fn to_string(&self) -> Result<String, ParseError> {
+        match &self.root {
+            Some(root) => {
+                let mut result = String::new();
+                self.node_to_string(root, &mut result, 0)?;
+                Ok(result)
+            },
+            None => Err(ParseError::StringNotFound(1)), // Adjusted to a hypothetical variant
+        }
+    }
+
+    fn node_to_string(&self, node: &Node, result: &mut String, indent: usize) -> Result<(), ParseError> {
+        match node {
+            Node::Element(element) => {
+                // Check if any attribute has the specified value
+                if element.get_attributes().values().any(|value| value == "com.android.vending.derived.apk.id") {
+                    // Skip this element and its children entirely
+                    return Ok(());
+                }
+
+                let indent_str = "  ".repeat(indent);
+                result.push_str(&format!("{}<{}", indent_str, element.get_tag()));
+
+                // Collect attributes into a vector and sort by name
+                let mut attrs: Vec<(&String, &String)> = element.get_attributes().iter().collect();
+                attrs.sort_by(|a, b| a.0.cmp(b.0));
+
+                // Iterate over sorted attributes and append them to the result string
+                for (attr, value) in attrs {
+                    result.push_str(&format!(" {}=\"{}\"", attr, value));
+                }
+
+                let children = element.get_children();
+                if children.is_empty() {
+                    result.push_str("/>\n");
+                } else {
+                    result.push_str(">\n");
+
+                    for child in children {
+                        self.node_to_string(child, result, indent + 1)?;
+                    }
+
+                    result.push_str(&format!("{}</{}>\n", indent_str, element.get_tag()));
+                }
+            },
+            Node::Cdata(cdata) => {
+                let indent_str = "  ".repeat(indent);
+                result.push_str(&format!("{}<![CDATA[{}]]>\n", indent_str, cdata.get_data()));
+            },
+        }
+
+        Ok(())
+    }
+
+
+
     pub(crate) fn new(binaryxml: BinaryXmlDocument) -> Result<Self, ParseError> {
         let string_pool = binaryxml.string_pool;
         let resource_map = binaryxml.resource_map;
@@ -162,6 +218,7 @@ impl XmlDocument {
             children: Vec::new(),
         })
     }
+    
 }
 
 ///Enum representing possible nodes within the parsed XML document.
